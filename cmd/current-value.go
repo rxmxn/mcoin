@@ -3,6 +3,8 @@ package cmd
 import (
 	"log"
 
+	"github.com/rxmxn/mcoin/coinbase"
+
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +15,13 @@ func init() {
 var currentValueCmd = &cobra.Command{
 	Use:   "current-value",
 	Short: "Get the current value of a specified cryto",
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Println("yep")
+		value, err := coinbase.GetCurrentValue(args[0])
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		log.Printf("%s", value.String())
 	},
 }
