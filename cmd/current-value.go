@@ -17,11 +17,12 @@ var currentValueCmd = &cobra.Command{
 	Short: "Get the current value of a specified cryto",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		value, err := coinbase.GetCurrentValue(args[0])
+		var coin coinbase.Coin
+		err := coin.GetCurrent(args[0])
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		log.Printf("%s", value.String())
+		log.Printf("%s", coin.ToString())
 	},
 }
