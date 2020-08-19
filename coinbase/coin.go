@@ -2,6 +2,7 @@ package coinbase
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -96,6 +97,64 @@ func (coin *Coin) GetCurrent(currency string) (err error) {
 	if err != nil {
 		return
 	}
+
+	return
+}
+
+func (coin *Coin) GetBidAskAveragedDifference(currency string) (err error) {
+	err = coin.setCurrency(currency)
+	if err != nil {
+		return
+	}
+
+	book, err := client.GetBook(coin.Currency, 2)
+	if err != nil {
+		return
+	}
+
+	bids, err := getAveragedValues(book.Bids)
+	if err != nil {
+		return
+	}
+
+	asks, err := getAveragedValues(book.Asks)
+	if err != nil {
+		return
+	}
+
+	difference := bids.Add(asks.Neg())
+
+	log.Printf("%s - %s", bids, asks)
+
+	if difference.IsPositive() {
+		log.Printf("Trending Up: %s", bids.Div(asks).Add(decimal.NewFromInt(-1)))
+	} else {
+		log.Printf("Trending Down: %s", asks.Div(bids).Add(decimal.NewFromInt(-1)))
+	}
+
+	return
+}
+
+func getAveragedValues(book []coinbasepro.BookEntry) (result decimal.Decimal, err error) {
+	var values []decimal.Decimal
+
+	for _, b := range book {
+		price, err := decimal.NewFromString(b.Price)
+		if err != nil {
+			break
+		}
+
+		size, err := decimal.NewFromString(b.Size)
+		if err != nil {
+			break
+		}
+
+		value := price.Mul(size)
+
+		values = append(values, value)
+	}
+
+	result = decimal.Avg(values[0], values[1:]...)
 
 	return
 }

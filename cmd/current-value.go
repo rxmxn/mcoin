@@ -24,5 +24,10 @@ var currentValueCmd = &cobra.Command{
 		}
 
 		log.Printf("%s", coin.ToString())
+
+		err = coin.GetBidAskAveragedDifference(args[0])
+		if err != nil {
+			log.Fatal(err)
+		}
 	},
 }
