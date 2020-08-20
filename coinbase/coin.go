@@ -2,13 +2,14 @@ package coinbase
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	coinbasepro "github.com/preichenberger/go-coinbasepro/v2"
-	"github.com/shopspring/decimal"
 )
 
 var CURRENCIES = []string{"ALGO", "DASH", "OXT", "ATOM", "KNC", "XRP", "REP", "MKR", "OMG", "COMP", "BAND", "XLM", "EOS", "ZRX", "BAT", "LOOM", "CVC", "DNT", "MANA", "GNT", "LINK", "BTC", "LTC", "ETH", "BCH", "ETC", "ZEC", "XTZ", "DAI"}
@@ -16,11 +17,11 @@ var CURRENCIES = []string{"ALGO", "DASH", "OXT", "ATOM", "KNC", "XRP", "REP", "M
 var client *coinbasepro.Client
 
 type Coin struct {
-	Price     decimal.Decimal
-	Low24h    decimal.Decimal
-	High24h   decimal.Decimal
-	Last      decimal.Decimal
-	OpenToday decimal.Decimal
+	Price     float64
+	Low24h    float64
+	High24h   float64
+	Last      float64
+	OpenToday float64
 	Currency  string
 }
 
@@ -35,11 +36,11 @@ func init() {
 func (coin *Coin) ToString() string {
 	s := []string{}
 	s = append(s, "Currency: "+coin.Currency)
-	s = append(s, "Current Price: "+coin.Price.String())
-	s = append(s, "Last: "+coin.Last.String())
-	s = append(s, "Low Today: "+coin.Low24h.String())
-	s = append(s, "High Today: "+coin.High24h.String())
-	s = append(s, "Open Today: "+coin.OpenToday.String())
+	s = append(s, fmt.Sprintf("Current Price: %f", coin.Price))
+	s = append(s, fmt.Sprintf("Last: %f", coin.Last))
+	s = append(s, fmt.Sprintf("Low Today: %f", coin.Low24h))
+	s = append(s, fmt.Sprintf("High Today: %f", coin.High24h))
+	s = append(s, fmt.Sprintf("Open Today: %f", coin.OpenToday))
 
 	return strings.Join(s, "\n")
 }
@@ -68,9 +69,8 @@ func (coin *Coin) GetCurrent(currency string) (err error) {
 		return
 	}
 
-	coin.Price, err = decimal.NewFromString(ticker.Price)
-	if err != nil {
-		return
+	if price, err := strconv.ParseFloat(ticker.Price, 64); err == nil {
+		coin.Price = price
 	}
 
 	stats, err := client.GetStats(coin.Currency)
@@ -78,24 +78,20 @@ func (coin *Coin) GetCurrent(currency string) (err error) {
 		return
 	}
 
-	coin.Last, err = decimal.NewFromString(stats.Last)
-	if err != nil {
-		return
+	if last, err := strconv.ParseFloat(stats.Last, 64); err == nil {
+		coin.Last = last
 	}
 
-	coin.Low24h, err = decimal.NewFromString(stats.Low)
-	if err != nil {
-		return
+	if low24h, err := strconv.ParseFloat(stats.Low, 64); err == nil {
+		coin.Low24h = low24h
 	}
 
-	coin.High24h, err = decimal.NewFromString(stats.High)
-	if err != nil {
-		return
+	if high24h, err := strconv.ParseFloat(stats.High, 64); err == nil {
+		coin.High24h = high24h
 	}
 
-	coin.OpenToday, err = decimal.NewFromString(stats.Open)
-	if err != nil {
-		return
+	if open, err := strconv.ParseFloat(stats.Open, 64); err == nil {
+		coin.OpenToday = open
 	}
 
 	return
@@ -122,39 +118,49 @@ func (coin *Coin) GetBidAskAveragedDifference(currency string) (err error) {
 		return
 	}
 
-	difference := bids.Add(asks.Neg())
+	difference := bids - asks
 
-	log.Printf("%s - %s", bids, asks)
+	log.Printf("%f - %f", bids, asks)
 
-	if difference.IsPositive() {
-		log.Printf("Trending Up: %s", bids.Div(asks).Add(decimal.NewFromInt(-1)))
+	if difference > 0 {
+		log.Printf("Trending Up: %f", bids/asks-1)
 	} else {
-		log.Printf("Trending Down: %s", asks.Div(bids).Add(decimal.NewFromInt(-1)))
+		log.Printf("Trending Down: %f", asks/bids-1)
 	}
 
 	return
 }
 
-func getAveragedValues(book []coinbasepro.BookEntry) (result decimal.Decimal, err error) {
-	var values []decimal.Decimal
+func getAveragedValues(book []coinbasepro.BookEntry) (result float64, err error) {
+	var values []float64
 
 	for _, b := range book {
-		price, err := decimal.NewFromString(b.Price)
+		price, err := strconv.ParseFloat(b.Price, 64)
+
 		if err != nil {
 			break
 		}
 
-		size, err := decimal.NewFromString(b.Size)
+		size, err := strconv.ParseFloat(b.Size, 64)
 		if err != nil {
 			break
 		}
 
-		value := price.Mul(size)
+		value := price * size
 
 		values = append(values, value)
 	}
 
-	result = decimal.Avg(values[0], values[1:]...)
+	result = average(values)
+
+	return
+}
+
+func average(values []float64) (result float64) {
+	for _, value := range values {
+		result += value
+	}
+	result = result / float64(len(values))
 
 	return
 }
