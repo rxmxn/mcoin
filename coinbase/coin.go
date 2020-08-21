@@ -3,7 +3,6 @@ package coinbase
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,6 +31,12 @@ type Coin struct {
 	Last     float64
 	Open     float64
 	Currency string
+	MBook    MoneyBook
+}
+
+type MoneyBook struct {
+	Ratio    float64
+	Trending bool // trending = true means that people are buyng more than selling
 }
 
 func init() {
@@ -51,9 +56,16 @@ func (coin *Coin) ToString() string {
 	s = append(s, fmt.Sprintf("High Today: %g", coin.High24h))
 	s = append(s, fmt.Sprintf("Open Today: %g", coin.Open))
 
+	if coin.MBook.Trending == true {
+		s = append(s, fmt.Sprintf("Trending to Buy ratio: %f", coin.MBook.Ratio))
+	} else {
+		s = append(s, fmt.Sprintf("Trending to Sell ratio: %f", coin.MBook.Ratio))
+	}
+
 	return strings.Join(s, "\n")
 }
 
+// Filter the specified currency to check if allowed, and then joins it with -USD
 func (coin *Coin) setCurrency(currency string) (err error) {
 	for _, c := range CURRENCIES {
 		if currency == c {
@@ -67,6 +79,7 @@ func (coin *Coin) setCurrency(currency string) (err error) {
 	return
 }
 
+// Get the most recent value of a specified Coin
 func (coin *Coin) GetCurrent(currency string) (err error) {
 	err = coin.setCurrency(currency)
 	if err != nil {
@@ -103,10 +116,17 @@ func (coin *Coin) GetCurrent(currency string) (err error) {
 		coin.Open = open
 	}
 
+	err = coin.getBidAskAveragedDifference(currency)
+	if err != nil {
+		return
+	}
+
 	return
 }
 
-func (coin *Coin) GetBidAskAveragedDifference(currency string) (err error) {
+// Get the ratio in which asks(people buying)/bids(people selling) is currently at
+// This might help perceiving a trend at a certain time
+func (coin *Coin) getBidAskAveragedDifference(currency string) (err error) {
 	err = coin.setCurrency(currency)
 	if err != nil {
 		return
@@ -127,17 +147,20 @@ func (coin *Coin) GetBidAskAveragedDifference(currency string) (err error) {
 		return
 	}
 
-	log.Printf("%f - %f", bids, asks)
-
-	if bids > asks && coin.Price > coin.Last {
-		log.Printf("Trending Up ratio: %f", bids/asks-1)
+	if bids > asks {
+		coin.MBook.Trending = true
+		coin.MBook.Ratio = bids / asks
 	} else {
-		log.Printf("Trending Down ratio: %f", asks/bids-1)
+		coin.MBook.Trending = false
+		coin.MBook.Ratio = asks / bids
 	}
 
 	return
 }
 
+// Get the average of all the elements in a Book
+// Used to calculate the average of the bids and the asks and then find the ratio
+// Basically it will return all the money spent buying a coin or earned selling it
 func getAveragedValues(book []coinbasepro.BookEntry) (result float64, err error) {
 	var values []float64
 
@@ -158,29 +181,19 @@ func getAveragedValues(book []coinbasepro.BookEntry) (result float64, err error)
 		values = append(values, value)
 	}
 
-	result = average(values)
-
-	return
-}
-
-// Calculate average of an array of values
-func average(values []float64) (result float64) {
-	for _, value := range values {
-		result += value
-	}
-	result = result / float64(len(values))
+	result = Average(values)
 
 	return
 }
 
 // Calculate the percentage comparing Current Price with Open, which is similar to compare it with the value from 24 hours ago
 func (coin *Coin) PercentOpen(currency string) float64 {
-	return coin.getPercentage(coin.Open)
+	return GetPercentageDifference(coin.Price, coin.Open)
 }
 
 // Calculate the percentage comparing Current Price with Last
 func (coin *Coin) PercentLast(currency string) float64 {
-	return coin.getPercentage(coin.Last)
+	return GetPercentageDifference(coin.Price, coin.Last)
 }
 
 // Calculate the percentage comparing Current Price with the Closed value from last week
@@ -193,7 +206,7 @@ func (coin *Coin) PercentLastMonth(currency string) (percent float64, err error)
 	return coin.percentClosedTimeSpan(currency, time.Now().AddDate(0, -1, 0), "1hour")
 }
 
-// Calculate the percentage comparing Current Price with the Closed value from last year
+// Calculate the percentage comparing Current Price with the Closed value from last 6 months
 func (coin *Coin) PercentLastSixMonths(currency string) (percent float64, err error) {
 	return coin.percentClosedTimeSpan(currency, time.Now().AddDate(0, -6, 0), "1day")
 }
@@ -220,12 +233,9 @@ func (coin *Coin) percentClosedTimeSpan(currency string, start time.Time, gran s
 		return
 	}
 
-	percent = coin.getPercentage(historics[0].Close)
+	if len(historics) > 0 {
+		percent = GetPercentageDifference(coin.Price, historics[0].Close)
+	}
 
 	return
-}
-
-// Calculate percentage with respect to the Current Price
-func (coin *Coin) getPercentage(value float64) float64 {
-	return (100 - value*100/coin.Price)
 }
