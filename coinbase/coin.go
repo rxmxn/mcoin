@@ -227,7 +227,6 @@ func (coin *Coin) percentClosedTimeSpan(currency string, start time.Time, gran s
 		end = start.AddDate(0, 0, 1)
 	}
 
-	// hourly Granularity, since just 1 value is needed
 	historics, err := client.GetHistoricRates(currency, coinbasepro.GetHistoricRatesParams{Start: start, End: end, Granularity: GRANULARITY[gran]})
 	if err != nil {
 		return
@@ -235,6 +234,23 @@ func (coin *Coin) percentClosedTimeSpan(currency string, start time.Time, gran s
 
 	if len(historics) > 0 {
 		percent = GetPercentageDifference(coin.Price, historics[0].Close)
+	}
+
+	return
+}
+
+// Get n-elements historical data up to 300 elements
+func (coin *Coin) GetHistoricRates(currency string, nelements int, gran string) (values []float64, err error) {
+	// Since this function is accessing historic data and there is a limit of 1 call/second to this endpoint as a public member, adding a 1 second delay each time this function is called
+	time.Sleep(1 * time.Second)
+
+	historics, err := client.GetHistoricRates(currency, coinbasepro.GetHistoricRatesParams{Granularity: GRANULARITY[gran]})
+	if err != nil {
+		return
+	}
+
+	for i := 0; i < nelements; i++ {
+		values = append(values, historics[i].Close)
 	}
 
 	return
