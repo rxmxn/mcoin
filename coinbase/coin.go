@@ -14,15 +14,24 @@ import (
 
 var CURRENCIES = []string{"ALGO", "DASH", "OXT", "ATOM", "KNC", "XRP", "REP", "MKR", "OMG", "COMP", "BAND", "XLM", "EOS", "ZRX", "BAT", "LOOM", "CVC", "DNT", "MANA", "GNT", "LINK", "BTC", "LTC", "ETH", "BCH", "ETC", "ZEC", "XTZ", "DAI"}
 
+var GRANULARITY = map[string]int{
+	"1minute":   60,
+	"5minutes":  300,
+	"15minutes": 900,
+	"1hour":     3600,
+	"6hours":    21600,
+	"1day":      86400,
+}
+
 var client *coinbasepro.Client
 
 type Coin struct {
-	Price     float64
-	Low24h    float64
-	High24h   float64
-	Last      float64
-	OpenToday float64
-	Currency  string
+	Price    float64
+	Low24h   float64
+	High24h  float64
+	Last     float64
+	Open     float64
+	Currency string
 }
 
 func init() {
@@ -36,11 +45,11 @@ func init() {
 func (coin *Coin) ToString() string {
 	s := []string{}
 	s = append(s, "Currency: "+coin.Currency)
-	s = append(s, fmt.Sprintf("Current Price: %f", coin.Price))
-	s = append(s, fmt.Sprintf("Last: %f", coin.Last))
-	s = append(s, fmt.Sprintf("Low Today: %f", coin.Low24h))
-	s = append(s, fmt.Sprintf("High Today: %f", coin.High24h))
-	s = append(s, fmt.Sprintf("Open Today: %f", coin.OpenToday))
+	s = append(s, fmt.Sprintf("Current Price: %g", coin.Price))
+	s = append(s, fmt.Sprintf("Last: %g", coin.Last))
+	s = append(s, fmt.Sprintf("Low Today: %g", coin.Low24h))
+	s = append(s, fmt.Sprintf("High Today: %g", coin.High24h))
+	s = append(s, fmt.Sprintf("Open Today: %g", coin.Open))
 
 	return strings.Join(s, "\n")
 }
@@ -91,7 +100,7 @@ func (coin *Coin) GetCurrent(currency string) (err error) {
 	}
 
 	if open, err := strconv.ParseFloat(stats.Open, 64); err == nil {
-		coin.OpenToday = open
+		coin.Open = open
 	}
 
 	return
@@ -118,14 +127,12 @@ func (coin *Coin) GetBidAskAveragedDifference(currency string) (err error) {
 		return
 	}
 
-	difference := bids - asks
-
 	log.Printf("%f - %f", bids, asks)
 
-	if difference > 0 {
-		log.Printf("Trending Up: %f", bids/asks-1)
+	if bids > asks && coin.Price > coin.Last {
+		log.Printf("Trending Up ratio: %f", bids/asks-1)
 	} else {
-		log.Printf("Trending Down: %f", asks/bids-1)
+		log.Printf("Trending Down ratio: %f", asks/bids-1)
 	}
 
 	return
@@ -156,6 +163,7 @@ func getAveragedValues(book []coinbasepro.BookEntry) (result float64, err error)
 	return
 }
 
+// Calculate average of an array of values
 func average(values []float64) (result float64) {
 	for _, value := range values {
 		result += value
@@ -163,4 +171,61 @@ func average(values []float64) (result float64) {
 	result = result / float64(len(values))
 
 	return
+}
+
+// Calculate the percentage comparing Current Price with Open, which is similar to compare it with the value from 24 hours ago
+func (coin *Coin) PercentOpen(currency string) float64 {
+	return coin.getPercentage(coin.Open)
+}
+
+// Calculate the percentage comparing Current Price with Last
+func (coin *Coin) PercentLast(currency string) float64 {
+	return coin.getPercentage(coin.Last)
+}
+
+// Calculate the percentage comparing Current Price with the Closed value from last week
+func (coin *Coin) PercentLastWeek(currency string) (percent float64, err error) {
+	return coin.percentOneElement(currency, time.Now().AddDate(0, 0, -7), "1hour")
+}
+
+// Calculate the percentage comparing Current Price with the Closed value from last month
+func (coin *Coin) PercentLastMonth(currency string) (percent float64, err error) {
+	return coin.percentOneElement(currency, time.Now().AddDate(0, -1, 0), "1hour")
+}
+
+// Calculate the percentage comparing Current Price with the Closed value from last year
+func (coin *Coin) PercentLastSixMonths(currency string) (percent float64, err error) {
+	return coin.percentOneElement(currency, time.Now().AddDate(0, -6, 0), "1day")
+}
+
+// Get 1 hour value from the start time provided and calculate percentage based on current Price
+func (coin *Coin) percentOneElement(currency string, start time.Time, gran string) (percent float64, err error) {
+	// Since this function is accessing historic data and there is a limit of 1 call/second to this endpoint as a public member, adding a 1 second delay each time this function is called
+	time.Sleep(1 * time.Second)
+
+	var end time.Time
+
+	switch gran {
+	case "1minute", "5minutes", "15minutes", "1hour":
+		end = start.Add(time.Hour + 1)
+	case "6hours":
+		end = start.Add(time.Hour + 6)
+	case "1day":
+		end = start.AddDate(0, 0, 1)
+	}
+
+	// hourly Granularity, since just 1 value is needed
+	historics, err := client.GetHistoricRates(currency, coinbasepro.GetHistoricRatesParams{Start: start, End: end, Granularity: GRANULARITY[gran]})
+	if err != nil {
+		return
+	}
+
+	percent = coin.getPercentage(historics[0].Close)
+
+	return
+}
+
+// Calculate percentage with respect to the Current Price
+func (coin *Coin) getPercentage(value float64) float64 {
+	return (100 - value*100/coin.Price)
 }

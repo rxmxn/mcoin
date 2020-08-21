@@ -25,6 +25,30 @@ var currentValueCmd = &cobra.Command{
 
 		log.Printf("%s", coin.ToString())
 
+		per := coin.PercentOpen(coin.Currency)
+		log.Printf("Compared with Open Percentage: %.2f", per)
+
+		per = coin.PercentLast(coin.Currency)
+		log.Printf("Compared with Last Percentage: %.2f", per)
+
+		per, err = coin.PercentLastWeek(coin.Currency)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Compared with Last Week's Percentage: %.2f", per)
+
+		per, err = coin.PercentLastMonth(coin.Currency)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Compared with Last Month's Percentage: %.2f", per)
+
+		per, err = coin.PercentLastSixMonths(coin.Currency)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Compared with Last Six Month's Percentage: %.2f", per)
+
 		err = coin.GetBidAskAveragedDifference(args[0])
 		if err != nil {
 			log.Fatal(err)
