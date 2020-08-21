@@ -185,21 +185,21 @@ func (coin *Coin) PercentLast(currency string) float64 {
 
 // Calculate the percentage comparing Current Price with the Closed value from last week
 func (coin *Coin) PercentLastWeek(currency string) (percent float64, err error) {
-	return coin.percentOneElement(currency, time.Now().AddDate(0, 0, -7), "1hour")
+	return coin.percentClosedTimeSpan(currency, time.Now().AddDate(0, 0, -7), "1hour")
 }
 
 // Calculate the percentage comparing Current Price with the Closed value from last month
 func (coin *Coin) PercentLastMonth(currency string) (percent float64, err error) {
-	return coin.percentOneElement(currency, time.Now().AddDate(0, -1, 0), "1hour")
+	return coin.percentClosedTimeSpan(currency, time.Now().AddDate(0, -1, 0), "1hour")
 }
 
 // Calculate the percentage comparing Current Price with the Closed value from last year
 func (coin *Coin) PercentLastSixMonths(currency string) (percent float64, err error) {
-	return coin.percentOneElement(currency, time.Now().AddDate(0, -6, 0), "1day")
+	return coin.percentClosedTimeSpan(currency, time.Now().AddDate(0, -6, 0), "1day")
 }
 
-// Get 1 hour value from the start time provided and calculate percentage based on current Price
-func (coin *Coin) percentOneElement(currency string, start time.Time, gran string) (percent float64, err error) {
+// Get 1 value from the start time provided and calculate percentage based on current Price
+func (coin *Coin) percentClosedTimeSpan(currency string, start time.Time, gran string) (percent float64, err error) {
 	// Since this function is accessing historic data and there is a limit of 1 call/second to this endpoint as a public member, adding a 1 second delay each time this function is called
 	time.Sleep(1 * time.Second)
 
